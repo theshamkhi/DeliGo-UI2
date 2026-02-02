@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deligo-frontend
+    ports:
+      - "80:80"
+    environment:
+      - REACT_APP_API_URL=${API_URL:-http://localhost:8080/api/v1}
+      - REACT_APP_ENV=${ENV:-production}
+    networks:
+      - deligo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  deligo-network:
+    driver: bridge
+
+volumes:
+  nginx-cache:
