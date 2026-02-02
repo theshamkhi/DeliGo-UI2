@@ -1,0 +1,73 @@
+.input-wrapper {
+    width: 100%;
+    margin-bottom: var(--spacing-md);
+}
+
+.input-label {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.input-required {
+    color: var(--error-main);
+    margin-left: 0.125rem;
+}
+
+.input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-main);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.input:hover:not(:disabled) {
+    border-color: var(--border-dark);
+}
+
+.input:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(50, 167, 208, 0.1);
+    outline: none;
+}
+
+.input:disabled {
+    background-color: var(--gray-100);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.input-error {
+    border-color: var(--error-main);
+}
+
+.input-error:focus {
+    border-color: var(--error-main);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.input-error-message {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--error-main);
+}
+
+.input-helper-text {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--text-tertiary);
+}

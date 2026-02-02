@@ -1,0 +1,68 @@
+.select-wrapper {
+    width: 100%;
+    margin-bottom: var(--spacing-md);
+}
+
+.select-label {
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.select-required {
+    color: var(--error-main);
+    margin-left: 0.125rem;
+}
+
+.select {
+    width: 100%;
+    padding: 0.625rem 2.25rem 0.625rem 0.875rem;
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--bg-primary);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-size: 1.5em 1.5em;
+    background-repeat: no-repeat;
+    border: 1px solid var(--border-main);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    appearance: none;
+}
+
+.select:hover:not(:disabled) {
+    border-color: var(--border-dark);
+}
+
+.select:focus {
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(50, 167, 208, 0.1);
+    outline: none;
+}
+
+.select:disabled {
+    background-color: var(--gray-100);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.select-error {
+    border-color: var(--error-main);
+}
+
+.select-error:focus {
+    border-color: var(--error-main);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.select-error-message {
+    display: block;
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--error-main);
+}
