@@ -17,19 +17,53 @@ const ColisDetailPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const dispatch = useAppDispatch();
-    const { selectedColis, isLoading } = useAppSelector((state) => state.colis);
+    const { selectedColis, isLoading, error } = useAppSelector((state) => state.colis);
     const { isManager, isLivreur, user } = useAuth();
+
     const [showStatusModal, setShowStatusModal] = useState(false);
     const [newStatus, setNewStatus] = useState<ColisStatut>(ColisStatut.CREE);
     const [statusComment, setStatusComment] = useState('');
     const [history, setHistory] = useState<HistoriqueLivraison[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [updatingStatus, setUpdatingStatus] = useState(false);
+    const [fetchError, setFetchError] = useState<string | null>(null);
+    const [errorType, setErrorType] = useState<'403' | '404' | 'network' | null>(null);
 
     useEffect(() => {
         if (id) {
-            dispatch(fetchColisById(id));
-            loadHistory(id);
+            setFetchError(null);
+            setErrorType(null);
+            console.log('[ColisDetailPage] Fetching colis:', id);
+
+            dispatch(fetchColisById(id))
+                .unwrap()
+                .then((colis) => {
+                    console.log('[ColisDetailPage] Colis loaded successfully:', colis);
+                    loadHistory(id);
+                })
+                .catch((err) => {
+                    console.error('[ColisDetailPage] Error fetching colis:', err);
+                    console.error('[ColisDetailPage] Error details:', {
+                        message: err.message,
+                        response: err.response,
+                        status: err.response?.status,
+                        data: err.response?.data
+                    });
+
+                    // Detect error type from HTTP status
+                    if (err.response?.status === 403) {
+                        setErrorType('403');
+                        setFetchError('Vous n\'avez pas l\'autorisation d\'accéder à ce colis');
+                    } else if (err.response?.status === 404) {
+                        setErrorType('404');
+                        setFetchError('Ce colis n\'existe pas ou a été supprimé');
+                    } else if (!err.response) {
+                        setErrorType('network');
+                        setFetchError('Erreur de connexion au serveur');
+                    } else {
+                        setFetchError(err.message || err || 'Erreur lors du chargement du colis');
+                    }
+                });
         }
         return () => {
             dispatch(clearSelectedColis());
@@ -72,25 +106,40 @@ const ColisDetailPage: React.FC = () => {
             return Object.values(ColisStatut);
         }
 
-        // Livreur a accès aux statuts de son workflow
+        // Livreur: workflow progressif de collecte à livraison
         if (isLivreur()) {
-            switch (currentStatus) {
-                case ColisStatut.CREE:
-                    return [ColisStatut.CREE, ColisStatut.COLLECTE];
-                case ColisStatut.COLLECTE:
-                    return [ColisStatut.COLLECTE, ColisStatut.EN_STOCK, ColisStatut.EN_TRANSIT];
-                case ColisStatut.EN_STOCK:
-                    return [ColisStatut.EN_STOCK, ColisStatut.EN_TRANSIT];
-                case ColisStatut.EN_TRANSIT:
-                    return [ColisStatut.EN_TRANSIT, ColisStatut.LIVRE, ColisStatut.RETOURNE];
-                case ColisStatut.LIVRE:
-                    return [ColisStatut.LIVRE];
-                case ColisStatut.ANNULE:
-                case ColisStatut.RETOURNE:
-                    return [currentStatus];
-                default:
-                    return [currentStatus];
+            // Define the livreur workflow in order
+            const livreurWorkflow = [
+                ColisStatut.CREE,
+                ColisStatut.COLLECTE,
+                ColisStatut.EN_STOCK,
+                ColisStatut.EN_TRANSIT,
+                ColisStatut.LIVRE,
+            ];
+
+            // Find current status index
+            const currentIndex = livreurWorkflow.indexOf(currentStatus);
+
+            // Special cases for terminal statuses
+            if (currentStatus === ColisStatut.LIVRE) {
+                return [ColisStatut.LIVRE]; // Cannot change after delivery
             }
+
+            if (currentStatus === ColisStatut.ANNULE || currentStatus === ColisStatut.RETOURNE) {
+                return [currentStatus]; // Terminal statuses
+            }
+
+            // If status not found in workflow, return current status only
+            if (currentIndex === -1) {
+                return [currentStatus];
+            }
+
+            // Show current status and all forward statuses
+            // Plus RETOURNE option (can return at any point)
+            const availableStatuses = livreurWorkflow.slice(currentIndex);
+            availableStatuses.push(ColisStatut.RETOURNE);
+
+            return availableStatuses;
         }
 
         return [currentStatus];
@@ -101,13 +150,17 @@ const ColisDetailPage: React.FC = () => {
 
         try {
             setUpdatingStatus(true);
+
+            const statusData = {
+                statut: newStatus,
+                commentaire: statusComment || undefined,
+            };
+
+            // Use standard endpoint - backend handles permissions
             await dispatch(
                 updateColisStatus({
                     id,
-                    data: {
-                        statut: newStatus,
-                        commentaire: statusComment || undefined,
-                    },
+                    data: statusData,
                 })
             ).unwrap();
 
@@ -116,7 +169,15 @@ const ColisDetailPage: React.FC = () => {
             loadHistory(id);
         } catch (error: any) {
             console.error('Failed to update status:', error);
-            alert(error.message || 'Erreur lors de la mise à jour du statut');
+
+            // Better error messages based on status code
+            if (error.response?.status === 403) {
+                alert('⛔ Accès refusé: Vous ne pouvez modifier que les colis qui vous sont assignés');
+            } else if (error.message) {
+                alert(error.message);
+            } else {
+                alert('Erreur lors de la mise à jour du statut');
+            }
         } finally {
             setUpdatingStatus(false);
         }
@@ -143,11 +204,70 @@ const ColisDetailPage: React.FC = () => {
 
     if (isLoading) return <Loading fullScreen />;
 
+    // Improved error UI with specific messages based on error type
+    if (fetchError || error) {
+        return (
+            <div className="error-container">
+                {errorType === '403' && (
+                    <>
+                        <h2>🔒 Accès Refusé</h2>
+                        <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+                            {isLivreur()
+                                ? 'Ce colis ne vous est pas assigné. Seul le livreur assigné peut y accéder.'
+                                : 'Vous n\'avez pas l\'autorisation d\'accéder à ce colis.'}
+                        </p>
+                    </>
+                )}
+
+                {errorType === '404' && (
+                    <>
+                        <h2>📦 Colis Introuvable</h2>
+                        <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+                            Le colis demandé n'existe pas ou a été supprimé.
+                        </p>
+                    </>
+                )}
+
+                {errorType === 'network' && (
+                    <>
+                        <h2>🌐 Erreur de Connexion</h2>
+                        <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+                            Impossible de se connecter au serveur. Vérifiez votre connexion internet.
+                        </p>
+                    </>
+                )}
+
+                {!errorType && (
+                    <>
+                        <h2>⚠️ Erreur</h2>
+                        <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+                            {fetchError || error || 'Une erreur est survenue'}
+                        </p>
+                    </>
+                )}
+
+                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+                    <Button variant="outline" onClick={() => navigate(-1)}>
+                        ← Retour
+                    </Button>
+                    <Button variant="primary" onClick={() => navigate(isLivreur() ? '/tournee' : '/colis')}>
+                        {isLivreur() ? 'Ma Tournée' : 'Liste des Colis'}
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     if (!selectedColis) {
         return (
             <div className="error-container">
                 <h2>Colis non trouvé</h2>
-                <Button onClick={() => navigate('/colis')}>Retour à la liste</Button>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+                    Le colis demandé n'existe pas ou a été supprimé.
+                </p>
+                <Button onClick={() => navigate(isLivreur() ? '/tournee' : '/colis')}>
+                    {isLivreur() ? 'Retour à ma tournée' : 'Retour à la liste'}
+                </Button>
             </div>
         );
     }
@@ -160,8 +280,8 @@ const ColisDetailPage: React.FC = () => {
     return (
         <div className="colis-detail-container">
             <div className="detail-header">
-                <Button variant="outline" onClick={() => navigate('/colis')}>
-                    ← Retour à la liste
+                <Button variant="outline" onClick={() => navigate(isLivreur() ? '/tournee' : '/colis')}>
+                    ← {isLivreur() ? 'Retour à ma tournée' : 'Retour à la liste'}
                 </Button>
                 <div className="detail-actions">
                     {canUpdateStatus() && (
@@ -187,8 +307,8 @@ const ColisDetailPage: React.FC = () => {
                 Référence: {selectedColis.id.substring(0, 8).toUpperCase()}
                 {isLivreur() && selectedColis.livreurId === user?.livreurId && (
                     <span style={{ marginLeft: '1rem', color: 'var(--success-main)', fontWeight: 'bold' }}>
-            ✓ Assigné à vous
-          </span>
+                        ✓ Assigné à vous
+                    </span>
                 )}
             </p>
 
@@ -206,14 +326,14 @@ const ColisDetailPage: React.FC = () => {
                         <div className="info-item">
                             <label>Priorité</label>
                             <span className="priority-badge" data-priority={selectedColis.priorite.toLowerCase()}>
-                {getPrioriteLabel(selectedColis.priorite)}
-              </span>
+                                {getPrioriteLabel(selectedColis.priorite)}
+                            </span>
                         </div>
                         <div className="info-item">
                             <label>Statut</label>
                             <span className="status-badge" style={{ backgroundColor: 'var(--primary-600)', color: 'white' }}>
-                {getStatutLabel(selectedColis.statut)}
-              </span>
+                                {getStatutLabel(selectedColis.statut)}
+                            </span>
                         </div>
                         <div className="info-item">
                             <label>Ville de destination</label>

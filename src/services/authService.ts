@@ -23,6 +23,11 @@ export const authService = {
         return response;
     },
 
+    /**
+     * Unified registration for ALL user types
+     * Use this to create MANAGER, LIVREUR, or CLIENT users
+     * Backend automatically creates and links business entities based on roles
+     */
     async register(data: RegisterData): Promise<User> {
         return await apiClient.post<User>('/auth/register', data);
     },

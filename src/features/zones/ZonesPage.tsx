@@ -14,11 +14,12 @@ import '../colis/ColisPages.css';
 
 const ZonesPage: React.FC = () => {
     const [zones, setZones] = useState<Zone[]>([]);
-    const [totalElements, setTotalElements] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
-    const [isLoading, setIsLoading] = useState(false);
-    const [showModal, setShowModal] = useState(false);
+    const [totalElements, setTotalElements] = useState<number>(0);
+    const [totalPages, setTotalPages] = useState<number>(0);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [showModal, setShowModal] = useState<boolean>(false);
     const [editingItem, setEditingItem] = useState<Zone | null>(null);
+
     const { page, size, goToPage, changeSize } = usePagination();
 
     useEffect(() => {
@@ -28,27 +29,34 @@ const ZonesPage: React.FC = () => {
     const loadData = async () => {
         try {
             setIsLoading(true);
+
             const data = await zoneService.getAll({ page, size });
-            setZones(data.content);
-            setTotalElements(data.totalElements);
-            setTotalPages(data.totalPages);
+
+            setZones(Array.isArray(data?.content) ? data.content : []);
+            setTotalElements(data?.totalElements ?? 0);
+            setTotalPages(data?.totalPages ?? 0);
         } catch (error) {
             console.error('Failed to load zones:', error);
+            setZones([]);
+            setTotalElements(0);
+            setTotalPages(0);
         } finally {
             setIsLoading(false);
         }
     };
 
     const handleDelete = async (id: string) => {
-        if (window.confirm('Êtes-vous sûr ?')) {
-            try {
-                await zoneService.delete(id);
-                loadData();
-            } catch (error) {
-                console.error('Failed to delete:', error);
-            }
+        if (!window.confirm('Êtes-vous sûr ?')) return;
+
+        try {
+            await zoneService.delete(id);
+            loadData();
+        } catch (error) {
+            console.error('Failed to delete zone:', error);
         }
     };
+
+    const hasZones = zones.length > 0;
 
     return (
         <div className="colis-list-container">
@@ -57,19 +65,35 @@ const ZonesPage: React.FC = () => {
                     <h1>Gestion des Zones</h1>
                     <p className="page-subtitle">{totalElements} zones</p>
                 </div>
-                <Button variant="primary" onClick={() => { setEditingItem(null); setShowModal(true); }}>
+                <Button
+                    variant="primary"
+                    onClick={() => {
+                        setEditingItem(null);
+                        setShowModal(true);
+                    }}
+                >
                     + Nouvelle Zone
                 </Button>
             </div>
 
             <Card padding="none">
                 {isLoading ? (
-                    <div style={{ padding: '3rem' }}><Loading /></div>
-                ) : zones.length === 0 ? (
+                    <div style={{ padding: '3rem' }}>
+                        <Loading />
+                    </div>
+                ) : !hasZones ? (
                     <div className="empty-state">
                         <div className="empty-icon">🗺️</div>
                         <h3>Aucune zone</h3>
-                        <Button variant="primary" onClick={() => setShowModal(true)}>Créer</Button>
+                        <Button
+                            variant="primary"
+                            onClick={() => {
+                                setEditingItem(null);
+                                setShowModal(true);
+                            }}
+                        >
+                            Créer
+                        </Button>
                     </div>
                 ) : (
                     <>
@@ -84,17 +108,28 @@ const ZonesPage: React.FC = () => {
                                 </tr>
                                 </thead>
                                 <tbody>
-                                {zones.map((item) => (
-                                    <tr key={item.id}>
-                                        <td>{item.nom}</td>
-                                        <td>{item.ville}</td>
-                                        <td>{item.codePostal}</td>
+                                {zones.map((zone) => (
+                                    <tr key={zone.id}>
+                                        <td>{zone.nom}</td>
+                                        <td>{zone.ville}</td>
+                                        <td>{zone.codePostal}</td>
                                         <td>
                                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                                <Button size="small" variant="outline" onClick={() => { setEditingItem(item); setShowModal(true); }}>
+                                                <Button
+                                                    size="small"
+                                                    variant="outline"
+                                                    onClick={() => {
+                                                        setEditingItem(zone);
+                                                        setShowModal(true);
+                                                    }}
+                                                >
                                                     Modifier
                                                 </Button>
-                                                <Button size="small" variant="danger" onClick={() => handleDelete(item.id)}>
+                                                <Button
+                                                    size="small"
+                                                    variant="danger"
+                                                    onClick={() => handleDelete(zone.id)}
+                                                >
                                                     Supprimer
                                                 </Button>
                                             </div>
@@ -104,6 +139,7 @@ const ZonesPage: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+
                         <Pagination
                             currentPage={page}
                             totalPages={totalPages}
@@ -117,50 +153,114 @@ const ZonesPage: React.FC = () => {
             </Card>
 
             <ZoneModal
+                key={editingItem?.id ?? 'create'}
                 isOpen={showModal}
                 onClose={() => setShowModal(false)}
                 item={editingItem}
-                onSuccess={() => { setShowModal(false); loadData(); }}
+                onSuccess={() => {
+                    setShowModal(false);
+                    loadData();
+                }}
             />
         </div>
     );
 };
 
-const ZoneModal: React.FC<any> = ({ isOpen, onClose, item, onSuccess }) => {
-    const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit } =
-        useForm<CreateZoneData>({
-            initialValues: {
-                nom: item?.nom || '',
-                ville: item?.ville || '',
-                codePostal: item?.codePostal || '',
-            },
-            validationRules: {
-                nom: validators.required(),
-                ville: validators.required(),
-                codePostal: validators.compose(
-                    validators.required(),
-                    validators.pattern(/^\d{5}$/, 'Code postal invalide (5 chiffres)')
-                ),
-            },
-            onSubmit: async (formValues) => {
-                if (item) {
-                    await zoneService.update(item.id, formValues);
-                } else {
-                    await zoneService.create(formValues);
-                }
-                onSuccess();
-            },
-        });
+
+interface ZoneModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    item: Zone | null;
+    onSuccess: () => void;
+}
+
+const ZoneModal: React.FC<ZoneModalProps> = ({
+                                                 isOpen,
+                                                 onClose,
+                                                 item,
+                                                 onSuccess,
+                                             }) => {
+    const {
+        values,
+        errors,
+        touched,
+        isSubmitting,
+        handleChange,
+        handleBlur,
+        handleSubmit,
+    } = useForm<CreateZoneData>({
+        initialValues: {
+            nom: item?.nom ?? '',
+            ville: item?.ville ?? '',
+            codePostal: item?.codePostal ?? '',
+        },
+        validationRules: {
+            nom: validators.required(),
+            ville: validators.required(),
+            codePostal: validators.compose(
+                validators.required(),
+                validators.pattern(/^\d{5}$/, 'Code postal invalide (5 chiffres)')
+            ),
+        },
+        onSubmit: async (formValues) => {
+            if (item) {
+                await zoneService.update(item.id, formValues);
+            } else {
+                await zoneService.create(formValues);
+            }
+            onSuccess();
+        },
+    });
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title={item ? 'Modifier' : 'Nouvelle Zone'}>
+        <Modal
+            isOpen={isOpen}
+            onClose={onClose}
+            title={item ? 'Modifier la zone' : 'Nouvelle zone'}
+        >
             <form onSubmit={handleSubmit}>
-                <Input name="nom" label="Nom de la Zone" value={values.nom} onChange={handleChange} onBlur={handleBlur} error={touched.nom ? errors.nom : undefined} required />
-                <Input name="ville" label="Ville" value={values.ville} onChange={handleChange} onBlur={handleBlur} error={touched.ville ? errors.ville : undefined} required />
-                <Input name="codePostal" label="Code Postal" placeholder="20000" value={values.codePostal} onChange={handleChange} onBlur={handleBlur} error={touched.codePostal ? errors.codePostal : undefined} required />
+                <Input
+                    name="nom"
+                    label="Nom de la Zone"
+                    value={values.nom}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={touched.nom ? errors.nom : undefined}
+                    required
+                />
+
+                <Input
+                    name="ville"
+                    label="Ville"
+                    value={values.ville}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={touched.ville ? errors.ville : undefined}
+                    required
+                />
+
+                <Input
+                    name="codePostal"
+                    label="Code Postal"
+                    placeholder="20000"
+                    value={values.codePostal}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={touched.codePostal ? errors.codePostal : undefined}
+                    required
+                />
+
                 <div className="form-actions" style={{ marginTop: '1.5rem' }}>
-                    <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
-                    <Button type="submit" variant="primary" isLoading={isSubmitting}>{item ? 'Modifier' : 'Créer'}</Button>
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        Annuler
+                    </Button>
+                    <Button
+                        type="submit"
+                        variant="primary"
+                        isLoading={isSubmitting}
+                    >
+                        {item ? 'Modifier' : 'Créer'}
+                    </Button>
                 </div>
             </form>
         </Modal>

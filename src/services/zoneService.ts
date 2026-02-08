@@ -1,5 +1,5 @@
-import {CreateZoneData, PageResponse, Zone} from "../types";
-import {apiClient} from "./api";
+import { CreateZoneData, PageResponse, Zone, Colis } from "../types";
+import { apiClient } from "./api";
 
 export const zoneService = {
     async getAll(params?: { page?: number; size?: number }): Promise<PageResponse<Zone>> {
@@ -23,5 +23,25 @@ export const zoneService = {
 
     async delete(id: string): Promise<void> {
         return await apiClient.delete<void>(`/zones/${id}`);
+    },
+
+    // ============================================
+    // NEW: Get colis in a zone
+    // ============================================
+
+    /**
+     * Get all colis within a specific zone
+     */
+    async getColis(
+        zoneId: string,
+        params?: { page?: number; size?: number }
+    ): Promise<PageResponse<Colis>> {
+        const queryParams = new URLSearchParams();
+        if (params?.page !== undefined) queryParams.append('page', params.page.toString());
+        if (params?.size !== undefined) queryParams.append('size', params.size.toString());
+
+        return await apiClient.get<PageResponse<Colis>>(
+            `/zones/${zoneId}/colis?${queryParams.toString()}`
+        );
     },
 };

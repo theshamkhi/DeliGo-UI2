@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { authService } from '../../services';
+import { authService } from '../../services/authService';
 import { User, LoginCredentials, RegisterData } from '../../types';
 
 interface AuthState {
@@ -9,28 +9,31 @@ interface AuthState {
     error: string | null;
 }
 
-const initialState: AuthState = {
+const getInitialState = (): AuthState => ({
     user: authService.getCurrentUser(),
     isAuthenticated: authService.isAuthenticated(),
     isLoading: false,
     error: null,
-};
+});
+
+const initialState: AuthState = getInitialState();
+
 
 // Async thunks
 export const login = createAsyncThunk(
     'auth/login',
     async (credentials: LoginCredentials, { rejectWithValue }) => {
         try {
-            const response = await authService.login(credentials);
-            return {
-                id: response.id,
-                username: response.username,
-                email: response.email,
-                nom: response.nom,
-                prenom: response.prenom,
-                roles: response.roles,
-                permissions: response.permissions,
-            } as User;
+            // First, authenticate and get tokens
+            await authService.login(credentials);
+
+            // Then, fetch the complete profile with livreurId and clientExpediteurId
+            const profile = await authService.getProfile();
+
+            // Update localStorage with complete profile data
+            localStorage.setItem('user', JSON.stringify(profile));
+
+            return profile;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.message || 'Login failed');
         }
@@ -56,7 +59,12 @@ export const fetchProfile = createAsyncThunk(
     'auth/fetchProfile',
     async (_, { rejectWithValue }) => {
         try {
-            return await authService.getProfile();
+            const profile = await authService.getProfile();
+
+            // Update localStorage with fresh profile data
+            localStorage.setItem('user', JSON.stringify(profile));
+
+            return profile;
         } catch (error: any) {
             return rejectWithValue(error.response?.data?.message || 'Failed to fetch profile');
         }

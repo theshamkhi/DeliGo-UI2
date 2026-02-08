@@ -7,6 +7,7 @@ import {
     UpdateColisStatusData,
     PageResponse,
     ColisStatistics,
+    ColisPriorite,
 } from '../../types';
 
 interface ColisState {
@@ -37,7 +38,16 @@ const initialState: ColisState = {
     error: null,
 };
 
+// ============================================
 // Async thunks
+// ============================================
+
+/**
+ * Fetch all colis (filtered by authenticated user on backend)
+ * - MANAGER: all colis
+ * - LIVREUR: only their assigned colis
+ * - CLIENT: only their colis
+ */
 export const fetchColis = createAsyncThunk(
     'colis/fetchColis',
     async (params: { page?: number; size?: number; sort?: string }, { rejectWithValue }) => {
@@ -53,9 +63,20 @@ export const fetchColisById = createAsyncThunk(
     'colis/fetchColisById',
     async (id: string, { rejectWithValue }) => {
         try {
-            return await colisService.getById(id);
+            console.log('[Redux] Fetching colis by ID:', id);
+            const result = await colisService.getById(id);
+            console.log('[Redux] Colis fetched successfully:', result);
+            return result;
         } catch (error: any) {
-            return rejectWithValue(error.response?.data?.message || 'Failed to fetch colis');
+            console.error('[Redux] Error fetching colis:', error);
+            console.error('[Redux] Error response:', error.response);
+
+            const errorMessage = error.response?.data?.message
+                || error.message
+                || 'Failed to fetch colis';
+
+            console.error('[Redux] Rejecting with:', errorMessage);
+            return rejectWithValue(errorMessage);
         }
     }
 );
@@ -127,6 +148,31 @@ export const fetchStatistics = createAsyncThunk(
     }
 );
 
+export const fetchOverdueColis = createAsyncThunk(
+    'colis/fetchOverdueColis',
+    async (_, { rejectWithValue }) => {
+        try {
+            return await colisService.getOverdue();
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to fetch overdue colis');
+        }
+    }
+);
+
+export const fetchColisByPriorite = createAsyncThunk(
+    'colis/fetchColisByPriorite',
+    async (
+        { priorite, page, size }: { priorite: ColisPriorite; page?: number; size?: number },
+        { rejectWithValue }
+    ) => {
+        try {
+            return await colisService.getByPriorite(priorite, { page, size });
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.message || 'Failed to fetch colis by priorite');
+        }
+    }
+);
+
 const colisSlice = createSlice({
     name: 'colis',
     initialState,
@@ -139,22 +185,25 @@ const colisSlice = createSlice({
         },
     },
     extraReducers: (builder) => {
+        // Helper function to handle paginated responses
+        const handlePaginatedResponse = (state: ColisState, action: PayloadAction<PageResponse<Colis>>) => {
+            state.isLoading = false;
+            state.colis = action.payload.content;
+            state.pagination = {
+                page: action.payload.number,
+                size: action.payload.size,
+                totalElements: action.payload.totalElements,
+                totalPages: action.payload.totalPages,
+            };
+        };
+
         // Fetch colis
         builder
             .addCase(fetchColis.pending, (state) => {
                 state.isLoading = true;
                 state.error = null;
             })
-            .addCase(fetchColis.fulfilled, (state, action: PayloadAction<PageResponse<Colis>>) => {
-                state.isLoading = false;
-                state.colis = action.payload.content;
-                state.pagination = {
-                    page: action.payload.number,
-                    size: action.payload.size,
-                    totalElements: action.payload.totalElements,
-                    totalPages: action.payload.totalPages,
-                };
-            })
+            .addCase(fetchColis.fulfilled, handlePaginatedResponse)
             .addCase(fetchColis.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
@@ -181,16 +230,7 @@ const colisSlice = createSlice({
                 state.isLoading = true;
                 state.error = null;
             })
-            .addCase(searchColis.fulfilled, (state, action: PayloadAction<PageResponse<Colis>>) => {
-                state.isLoading = false;
-                state.colis = action.payload.content;
-                state.pagination = {
-                    page: action.payload.number,
-                    size: action.payload.size,
-                    totalElements: action.payload.totalElements,
-                    totalPages: action.payload.totalPages,
-                };
-            })
+            .addCase(searchColis.fulfilled, handlePaginatedResponse)
             .addCase(searchColis.rejected, (state, action) => {
                 state.isLoading = false;
                 state.error = action.payload as string;
@@ -244,6 +284,33 @@ const colisSlice = createSlice({
         builder
             .addCase(fetchStatistics.fulfilled, (state, action: PayloadAction<ColisStatistics>) => {
                 state.statistics = action.payload;
+            });
+
+        // Fetch overdue colis
+        builder
+            .addCase(fetchOverdueColis.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(fetchOverdueColis.fulfilled, (state, action: PayloadAction<Colis[]>) => {
+                state.isLoading = false;
+                state.colis = action.payload;
+            })
+            .addCase(fetchOverdueColis.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
+            });
+
+        // Fetch by priorite
+        builder
+            .addCase(fetchColisByPriorite.pending, (state) => {
+                state.isLoading = true;
+                state.error = null;
+            })
+            .addCase(fetchColisByPriorite.fulfilled, handlePaginatedResponse)
+            .addCase(fetchColisByPriorite.rejected, (state, action) => {
+                state.isLoading = false;
+                state.error = action.payload as string;
             });
     },
 });

@@ -25,19 +25,21 @@ const DestinatairesPage: React.FC = () => {
     loadData();
   }, [page, size]);
 
-  const loadData = async () => {
-    try {
-      setIsLoading(true);
-      const data = await destinataireService.getAll({ page, size });
-      setDestinataires(data.content);
-      setTotalElements(data.totalElements);
-      setTotalPages(data.totalPages);
-    } catch (error) {
-      console.error('Failed to load destinataires:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const loadData = async () => {
+        try {
+            setIsLoading(true);
+            const data = await destinataireService.getAll({ page, size });
+
+            setDestinataires(Array.isArray(data?.content) ? data.content : []);
+            setTotalElements(data?.totalElements ?? 0);
+            setTotalPages(data?.totalPages ?? 0);
+        } catch (error) {
+            console.error('Failed to load destinataires:', error);
+            setDestinataires([]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
   const handleDelete = async (id: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer ce destinataire ?')) {
@@ -63,15 +65,25 @@ const DestinatairesPage: React.FC = () => {
       </div>
 
       <Card padding="none">
-        {isLoading ? (
-          <div style={{ padding: '3rem' }}><Loading /></div>
-        ) : destinataires.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">👥</div>
-            <h3>Aucun destinataire</h3>
-            <Button variant="primary" onClick={() => setShowModal(true)}>Créer</Button>
-          </div>
-        ) : (
+          {isLoading ? (
+              <div style={{ padding: '3rem' }}>
+                  <Loading />
+              </div>
+          ) : destinataires.length === 0 ? (
+              <div className="empty-state">
+                  <div className="empty-icon">👥</div>
+                  <h3>Aucun destinataire</h3>
+                  <Button
+                      variant="primary"
+                      onClick={() => {
+                          setEditingItem(null);
+                          setShowModal(true);
+                      }}
+                  >
+                      Créer
+                  </Button>
+              </div>
+          ) : (
           <>
             <div className="table-container">
               <table className="data-table">

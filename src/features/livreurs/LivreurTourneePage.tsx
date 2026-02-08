@@ -1,36 +1,69 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppDispatch, useAppSelector } from '../../store';
-import { fetchColis } from '../../store/slices/colisSlice';
+import { colisService } from '../../services/colisService';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
 import { Loading } from '../../components/common/Loading';
 import { useAuth } from '../../hooks/useAuth';
 import { usePagination } from '../../hooks/usePagination';
 import { getStatutLabel, getStatutColor, getPrioriteLabel, formatDate } from '../../utils/formatters';
-import { ColisStatut } from '../../types';
+import { Colis, ColisStatut } from '../../types';
 import '../colis/ColisPages.css';
 
 const LivreurTourneePage: React.FC = () => {
     const navigate = useNavigate();
-    const dispatch = useAppDispatch();
-    const { colis, isLoading } = useAppSelector((state) => state.colis);
     const { user } = useAuth();
     const { page, size } = usePagination({ initialSize: 50 });
 
+    const [colis, setColis] = useState<Colis[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [filter, setFilter] = useState<'all' | 'pending' | 'completed'>('pending');
 
+    // ✅ Use existing /colis endpoint - backend filters by authenticated user
     useEffect(() => {
-        dispatch(fetchColis({ page, size, sort: 'priorite,desc' }));
-    }, [dispatch, page, size]);
+        const loadMyDeliveries = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
+
+                // Backend automatically filters by authenticated livreur
+                const data = await colisService.getAll({ page, size });
+                setColis(data.content || []);
+            } catch (err: any) {
+                console.error('Failed to load deliveries:', err);
+                setError(err.message || 'Erreur lors du chargement de vos livraisons');
+                setColis([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadMyDeliveries();
+    }, [page, size]);
 
     if (isLoading) return <Loading fullScreen />;
+
+    if (error) {
+        return (
+            <div className="error-container">
+                <h2>⚠️ Erreur</h2>
+                <p style={{ marginBottom: '1.5rem', color: 'var(--text-secondary)' }}>
+                    {error}
+                </p>
+                <Button variant="primary" onClick={() => navigate('/dashboard')}>
+                    Retour au tableau de bord
+                </Button>
+            </div>
+        );
+    }
 
     // Filtrer et organiser les colis
     const colisACollecter = colis.filter(c => c.statut === ColisStatut.CREE);
     const colisEnCours = colis.filter(c =>
         c.statut === ColisStatut.COLLECTE ||
-        c.statut === ColisStatut.EN_TRANSIT
+        c.statut === ColisStatut.EN_TRANSIT ||
+        c.statut === ColisStatut.EN_STOCK
     );
     const colisLivres = colis.filter(c => c.statut === ColisStatut.LIVRE);
     const colisProblemes = colis.filter(c =>
@@ -125,19 +158,27 @@ const LivreurTourneePage: React.FC = () => {
             {filteredColis.length === 0 ? (
                 <Card>
                     <div className="empty-state">
-                        <div className="empty-icon">🎉</div>
-                        <h3>Aucun colis dans cette catégorie</h3>
+                        <div className="empty-icon">
+                            {colis.length === 0 ? '📭' : '🎉'}
+                        </div>
+                        <h3>
+                            {colis.length === 0
+                                ? 'Aucun colis assigné'
+                                : 'Aucun colis dans cette catégorie'}
+                        </h3>
                         <p>
-                            {filter === 'pending'
-                                ? 'Tous vos colis sont livrés !'
-                                : 'Changez de filtre pour voir vos colis'}
+                            {colis.length === 0
+                                ? 'Vous n\'avez aucun colis assigné pour le moment. Contactez votre manager.'
+                                : filter === 'pending'
+                                    ? 'Tous vos colis sont livrés !'
+                                    : 'Changez de filtre pour voir vos colis'}
                         </p>
                     </div>
                 </Card>
             ) : (
                 <div style={{ display: 'grid', gap: '1rem' }}>
                     {filteredColis.map((c) => (
-                        <Card key={c.id} className="colis-card">
+                        <Card key={c.id} className="colis-card" padding="large">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                 <div style={{ flex: 1 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '0.5rem' }}>
@@ -149,14 +190,14 @@ const LivreurTourneePage: React.FC = () => {
                                                 color: 'white',
                                             }}
                                         >
-                      {getStatutLabel(c.statut)}
-                    </span>
+                                            {getStatutLabel(c.statut)}
+                                        </span>
                                         <span
                                             className="priority-badge"
                                             data-priority={c.priorite.toLowerCase()}
                                         >
-                      {getPrioriteLabel(c.priorite)}
-                    </span>
+                                            {getPrioriteLabel(c.priorite)}
+                                        </span>
                                     </div>
 
                                     <h3 style={{ margin: '0.5rem 0', fontSize: '1.125rem' }}>

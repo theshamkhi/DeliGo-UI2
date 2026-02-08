@@ -10,7 +10,7 @@ import { Modal } from '../../components/common/Modal';
 import { Pagination } from '../../components/common/Pagination';
 import { Loading } from '../../components/common/Loading';
 import { useForm } from '../../hooks/useForm';
-import { Livreur, CreateLivreurData, Zone } from '../../types';
+import { Livreur, Zone } from '../../types';
 import { validators } from '../../utils/validators';
 import '../colis/ColisPages.css';
 
@@ -32,12 +32,17 @@ const LivreursPage: React.FC = () => {
     const loadData = async () => {
         try {
             setIsLoading(true);
+
             const data = await livreurService.getAll({ page, size });
-            setLivreurs(data.content);
-            setTotalElements(data.totalElements);
-            setTotalPages(data.totalPages);
+
+            setLivreurs(Array.isArray(data?.content) ? data.content : []);
+            setTotalElements(data?.totalElements ?? 0);
+            setTotalPages(data?.totalPages ?? 0);
         } catch (error) {
             console.error('Failed to load livreurs:', error);
+            setLivreurs([]);
+            setTotalElements(0);
+            setTotalPages(0);
         } finally {
             setIsLoading(false);
         }
@@ -46,9 +51,10 @@ const LivreursPage: React.FC = () => {
     const loadZones = async () => {
         try {
             const data = await zoneService.getAll({ page: 0, size: 100 });
-            setZones(data.content);
+            setZones(Array.isArray(data?.content) ? data.content : []);
         } catch (error) {
             console.error('Failed to load zones:', error);
+            setZones([]);
         }
     };
 
@@ -137,80 +143,7 @@ const LivreursPage: React.FC = () => {
                     </>
                 )}
             </Card>
-
-            <LivreurModal
-                isOpen={showModal}
-                onClose={() => setShowModal(false)}
-                item={editingItem}
-                zones={zones}
-                onSuccess={() => { setShowModal(false); loadData(); }}
-            />
         </div>
-    );
-};
-
-const LivreurModal: React.FC<any> = ({ isOpen, onClose, item, zones, onSuccess }) => {
-    const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit } =
-        useForm<CreateLivreurData>({
-            initialValues: {
-                nom: item?.nom || '',
-                prenom: item?.prenom || '',
-                telephone: item?.telephone || '',
-                vehicule: item?.vehicule || '',
-                zoneAssigneeId: item?.zoneAssigneeId || '',
-                actif: item?.actif ?? true,
-            },
-            validationRules: {
-                nom: validators.required(),
-                prenom: validators.required(),
-                telephone: validators.compose(validators.required(), validators.phoneNumber()),
-                vehicule: validators.required(),
-            },
-            onSubmit: async (formValues) => {
-                if (item) {
-                    await livreurService.update(item.id, formValues);
-                } else {
-                    await livreurService.create(formValues);
-                }
-                onSuccess();
-            },
-        });
-
-    return (
-        <Modal isOpen={isOpen} onClose={onClose} title={item ? 'Modifier' : 'Nouveau Livreur'}>
-            <form onSubmit={handleSubmit}>
-                <Input name="nom" label="Nom" value={values.nom} onChange={handleChange} onBlur={handleBlur} error={touched.nom ? errors.nom : undefined} required />
-                <Input name="prenom" label="Prénom" value={values.prenom} onChange={handleChange} onBlur={handleBlur} error={touched.prenom ? errors.prenom : undefined} required />
-                <Input name="telephone" label="Téléphone" value={values.telephone} onChange={handleChange} onBlur={handleBlur} error={touched.telephone ? errors.telephone : undefined} required />
-                <Input name="vehicule" label="Véhicule" value={values.vehicule} onChange={handleChange} onBlur={handleBlur} error={touched.vehicule ? errors.vehicule : undefined} required />
-                <Select
-                    name="zoneAssigneeId"
-                    label="Zone Assignée"
-                    value={values.zoneAssigneeId || ''}
-                    onChange={handleChange}
-                    options={[
-                        { value: '', label: 'Aucune zone' },
-                        ...zones.map((z: { id: any; nom: any; ville: any; }) => ({ value: z.id, label: `${z.nom} - ${z.ville}` }))
-                    ]}
-                />
-                <div style={{ marginBottom: '1rem' }}>
-                    <label>
-                        <input
-                            type="checkbox"
-                            name="actif"
-                            checked={values.actif}
-                            onChange={handleChange}
-                            style={{ marginRight: '0.5rem' }}
-                        />
-                        Actif
-                    </label>
-                </div>
-                <div className="form-actions">
-                    <Button type="button" variant="outline" onClick={onClose}>Annuler</Button>
-                    <Button type="submit" variant="primary" isLoading={isSubmitting}>{item ? 'Modifier' : 'Créer'}</Button>
-                </div>
-            </form>
-        </Modal>
     );
 };
 

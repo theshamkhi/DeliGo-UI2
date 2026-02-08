@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { clientService } from '../../services';
+import { clientService } from '../../services/clientService';
 import { usePagination } from '../../hooks/usePagination';
 import { Card } from '../../components/common/Card';
 import { Button } from '../../components/common/Button';
@@ -8,7 +8,7 @@ import { Modal } from '../../components/common/Modal';
 import { Pagination } from '../../components/common/Pagination';
 import { Loading } from '../../components/common/Loading';
 import { useForm } from '../../hooks/useForm';
-import { Client, CreateClientData } from '../../types';
+import { Client } from '../../types';
 import { validators } from '../../utils/validators';
 import '../colis/ColisPages.css';
 
@@ -29,14 +29,19 @@ const ClientsPage: React.FC = () => {
     const loadClients = async () => {
         try {
             setIsLoading(true);
+
             const data = searchTerm
                 ? await clientService.search({ keyword: searchTerm, page, size })
                 : await clientService.getAll({ page, size });
-            setClients(data.content);
-            setTotalElements(data.totalElements);
-            setTotalPages(data.totalPages);
+
+            setClients(Array.isArray(data?.content) ? data.content : []);
+            setTotalElements(data?.totalElements ?? 0);
+            setTotalPages(data?.totalPages ?? 0);
         } catch (error) {
             console.error('Failed to load clients:', error);
+            setClients([]);
+            setTotalElements(0);
+            setTotalPages(0);
         } finally {
             setIsLoading(false);
         }
@@ -152,127 +157,7 @@ const ClientsPage: React.FC = () => {
                     </>
                 )}
             </Card>
-
-            <ClientModal
-                isOpen={showModal}
-                onClose={() => setShowModal(false)}
-                client={editingClient}
-                onSuccess={() => {
-                    setShowModal(false);
-                    loadClients();
-                }}
-            />
         </div>
-    );
-};
-
-interface ClientModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    client: Client | null;
-    onSuccess: () => void;
-}
-
-const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, client, onSuccess }) => {
-    const isEditing = !!client;
-
-    const { values, errors, touched, isSubmitting, handleChange, handleBlur, handleSubmit, reset } =
-        useForm<CreateClientData>({
-            initialValues: {
-                nom: client?.nom || '',
-                prenom: client?.prenom || '',
-                email: client?.email || '',
-                telephone: client?.telephone || '',
-                adresse: client?.adresse || '',
-            },
-            validationRules: {
-                nom: validators.required(),
-                prenom: validators.required(),
-                email: validators.compose(validators.required(), validators.email()),
-                telephone: validators.compose(validators.required(), validators.phoneNumber()),
-                adresse: validators.required(),
-            },
-            onSubmit: async (formValues) => {
-                try {
-                    if (isEditing && client) {
-                        await clientService.update(client.id, formValues);
-                    } else {
-                        await clientService.create(formValues);
-                    }
-                    reset();
-                    onSuccess();
-                } catch (error) {
-                    console.error('Failed to save client:', error);
-                }
-            },
-        });
-
-    return (
-        <Modal
-            isOpen={isOpen}
-            onClose={onClose}
-            title={isEditing ? 'Modifier le Client' : 'Nouveau Client'}
-            size="medium"
-        >
-            <form onSubmit={handleSubmit}>
-                <Input
-                    name="nom"
-                    label="Nom"
-                    value={values.nom}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    error={touched.nom ? errors.nom : undefined}
-                    required
-                />
-                <Input
-                    name="prenom"
-                    label="Prénom"
-                    value={values.prenom}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    error={touched.prenom ? errors.prenom : undefined}
-                    required
-                />
-                <Input
-                    name="email"
-                    label="Email"
-                    type="email"
-                    value={values.email}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    error={touched.email ? errors.email : undefined}
-                    required
-                />
-                <Input
-                    name="telephone"
-                    label="Téléphone"
-                    placeholder="+212612345678"
-                    value={values.telephone}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    error={touched.telephone ? errors.telephone : undefined}
-                    required
-                />
-                <Input
-                    name="adresse"
-                    label="Adresse"
-                    value={values.adresse}
-                    onChange={handleChange}
-                    onBlur={handleBlur}
-                    error={touched.adresse ? errors.adresse : undefined}
-                    required
-                />
-
-                <div className="form-actions" style={{ marginTop: '1.5rem' }}>
-                    <Button type="button" variant="outline" onClick={onClose}>
-                        Annuler
-                    </Button>
-                    <Button type="submit" variant="primary" isLoading={isSubmitting}>
-                        {isEditing ? 'Modifier' : 'Créer'}
-                    </Button>
-                </div>
-            </form>
-        </Modal>
     );
 };
 

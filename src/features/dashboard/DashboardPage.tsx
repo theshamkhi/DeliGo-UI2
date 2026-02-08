@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../../store';
 import { fetchStatistics } from '../../store/slices/colisSlice';
 import { Card } from '../../components/common/Card';
@@ -8,12 +9,20 @@ import './DashboardPage.css';
 
 const DashboardPage: React.FC = () => {
     const dispatch = useAppDispatch();
+    const navigate = useNavigate();
     const { statistics, isLoading } = useAppSelector((state) => state.colis);
     const { user, isManager, isLivreur, isClient } = useAuth();
 
     useEffect(() => {
         dispatch(fetchStatistics());
     }, [dispatch]);
+
+    // Redirect livreur to their dedicated dashboard
+    useEffect(() => {
+        if (isLivreur()) {
+            navigate('/tournee');
+        }
+    }, [isLivreur, navigate]);
 
     if (isLoading) return <Loading fullScreen />;
 
